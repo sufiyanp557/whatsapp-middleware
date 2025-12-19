@@ -4,32 +4,41 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-// Health check
+/**
+ * Health check
+ */
 app.get("/", (req, res) => {
   res.send("WhatsApp Middleware is running");
 });
 
-// Webhook verification (Meta)
+/**
+ * Webhook verification (Meta calls this)
+ */
 app.get("/webhook", (req, res) => {
-  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+  if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+    console.log("Webhook verified successfully");
     return res.status(200).send(challenge);
   }
+
+  console.log("Webhook verification failed");
   return res.sendStatus(403);
 });
 
-// Webhook receiver
+/**
+ * Webhook receiver (messages & status updates)
+ */
 app.post("/webhook", (req, res) => {
-  console.log("Incoming WhatsApp Event:", JSON.stringify(req.body));
+  console.log("Incoming webhook:", JSON.stringify(req.body, null, 2));
   res.sendStatus(200);
 });
 
-// Send message API
+/**
+ * Send message API (optional – keep for later)
+ */
 app.post("/send", async (req, res) => {
   const { to, message } = req.body;
 
@@ -40,21 +49,23 @@ app.post("/send", async (req, res) => {
         messaging_product: "whatsapp",
         to,
         type: "text",
-        text: { body: message }
+        text: { body: message },
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json"
-        }
+          Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
+        },
       }
     );
 
     res.json(response.data);
   } catch (error) {
-    res.status(500).json(error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data || error.message });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on", PORT));
+app.listen(PORT, () => {
+  console.log("Server running on", PORT);
+});
