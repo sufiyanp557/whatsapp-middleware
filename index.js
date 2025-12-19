@@ -4,47 +4,58 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-/**
- * Health check
- */
+// ==========================
+// ENV VARIABLES (Render)
+// ==========================
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN; // must be "olyvr"
+const WHATSAPP_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+
+// ==========================
+// HEALTH CHECK
+// ==========================
 app.get("/", (req, res) => {
   res.send("WhatsApp Middleware is running");
 });
 
-/**
- * Webhook verification (Meta calls this)
- */
+// ==========================
+// META WEBHOOK VERIFICATION
+// ==========================
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
-    console.log("Webhook verified successfully");
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("✅ Webhook verified successfully");
     return res.status(200).send(challenge);
   }
 
-  console.log("Webhook verification failed");
+  console.log("❌ Webhook verification failed");
   return res.sendStatus(403);
 });
 
-/**
- * Webhook receiver (messages & status updates)
- */
+// ==========================
+// RECEIVE WHATSAPP EVENTS
+// ==========================
 app.post("/webhook", (req, res) => {
-  console.log("Incoming webhook:", JSON.stringify(req.body, null, 2));
+  console.log("📩 Incoming webhook:", JSON.stringify(req.body, null, 2));
   res.sendStatus(200);
 });
 
-/**
- * Send message API (optional – keep for later)
- */
+// ==========================
+// SEND WHATSAPP MESSAGE API
+// ==========================
 app.post("/send", async (req, res) => {
   const { to, message } = req.body;
 
+  if (!to || !message) {
+    return res.status(400).json({ error: "to and message are required" });
+  }
+
   try {
     const response = await axios.post(
-      `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         to,
@@ -53,7 +64,7 @@ app.post("/send", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
           "Content-Type": "application/json",
         },
       }
@@ -61,11 +72,17 @@ app.post("/send", async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ error: error.response?.data || error.message });
+    console.error("Send message error:", error.response?.data || error.message);
+    res.status(500).json({
+      error: error.response?.data || error.message,
+    });
   }
 });
 
+// ==========================
+// START SERVER
+// ==========================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("Server running on", PORT);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
